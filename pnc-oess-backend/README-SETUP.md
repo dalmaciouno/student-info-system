@@ -26,10 +26,3 @@ Demo logins (all password `password123`): student, registrar, cashier, departmen
 3. Render > New > Web Service > your repo > Runtime: Docker.
 4. Add the env vars from `.env.render.example`.
 5. Health check path: `/api/health`.
-
-## NO-SECURITY VERSION
-No auth, no role checks, no login password check, no throttle, no student scoping.
-Only run locally / on a throwaway DB. Security (Sanctum auth:sanctum, RoleMiddleware,
-throttle, scoping) is added separately.
-Identify the acting user with a Bearer token, or an `X-Act-As: username` header;
-otherwise requests act as the first Administrator.
