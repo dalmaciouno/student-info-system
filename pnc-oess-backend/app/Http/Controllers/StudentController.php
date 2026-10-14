@@ -7,14 +7,18 @@ use Illuminate\Http\Request;
 
 class StudentController extends Controller
 {
+    // staff only (route middleware)
     public function index()
     {
         return Student::orderBy('seq')->get();
     }
 
-    // NO-SECURITY VERSION: any student record can be fetched by anyone
     public function show(Request $request, string $studentNumber)
     {
+        $user = $request->user();
+        if ($user->role === 'Student' && $user->studentNumber !== $studentNumber) {
+            return response()->json(['message' => 'You do not have permission to do that.'], 403);
+        }
         return Student::where('studentNumber', $studentNumber)->first() ?? response()->json(null);
     }
 }

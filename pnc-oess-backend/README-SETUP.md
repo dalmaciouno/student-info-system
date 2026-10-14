@@ -1,28 +1,58 @@
-# PnC-OESS backend: setup
+# PnC-OESS backend
 
-Files in this folder go ON TOP of a fresh Laravel install.
+This Laravel API serves the React frontend in the separate `pinaka updated na
+front-end` folder. It uses Laravel Sanctum bearer tokens and the configured
+database connection.
 
-## 1. Create the Laravel project (local)
-    composer create-project laravel/laravel pnc-oess-backend
-    cd pnc-oess-backend
-    php artisan install:api        # installs Sanctum + routes/api.php (say yes to any prompts)
+## Local development
 
-## 2. Copy this overlay in
-Copy everything from this folder into the project root, and let it overwrite:
-`routes/api.php`, `database/seeders/DatabaseSeeder.php`, `app/Models/User.php`.
+1. Install PHP 8.2+ and Composer, then install the dependencies:
 
-Then delete nothing, the new migration replaces the default users table on its own.
+   ```powershell
+   composer install
+   ```
 
-## 3. Local database
-In `.env` set your DB (Postgres, or MySQL if you're on XAMPP), then:
-    php artisan migrate:fresh --seed
-    php artisan serve              # http://127.0.0.1:8000/api/health
+2. Create `.env` from `.env.example`, set the database connection, and generate
+   the application key:
 
-Demo logins (all password `password123`): student, registrar, cashier, department, admin
+   ```powershell
+   Copy-Item .env.example .env
+   php artisan key:generate
+   ```
 
-## 4. Render
-1. Push the backend to GitHub.
-2. Render > New > Postgres (free), copy the Internal Database URL.
-3. Render > New > Web Service > your repo > Runtime: Docker.
-4. Add the env vars from `.env.render.example`.
-5. Health check path: `/api/health`.
+   For local SQLite development, ensure `database/database.sqlite` exists and
+   set `DB_CONNECTION=sqlite` in `.env`. For MySQL or PostgreSQL, configure the
+   corresponding `DB_*` values instead.
+
+3. Run the migrations and seed the demo records:
+
+   ```powershell
+   php artisan migrate --seed
+   ```
+
+4. Start the API:
+
+   ```powershell
+   php artisan serve
+   ```
+
+   The health endpoint is `http://127.0.0.1:8000/api/health`. The frontend
+   defaults to `http://localhost:8000/api`; set its `VITE_API_URL` if using a
+   different API URL.
+
+5. Set `CORS_ALLOWED_ORIGINS` to the frontend origin (comma-separated if
+   there are multiple). The default allows the local Vite origin
+   `http://localhost:5173`; the deployed backend must be configured with the
+   actual frontend origin.
+
+Demo logins use the password `password123`: `student`, `registrar`, `cashier`,
+`department`, and `admin`.
+
+## Render deployment
+
+1. Create a Render PostgreSQL database and a Docker web service for this
+   repository.
+2. Configure the environment variables in `.env.render.example`, including
+   the database URL, generated `APP_KEY`, and the production frontend origin in
+   `CORS_ALLOWED_ORIGINS`.
+3. Set the service health check path to `/api/health`.

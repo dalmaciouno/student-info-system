@@ -10,16 +10,18 @@ class SettingsController extends Controller
 {
     public function show()
     {
-        return SystemSetting::first()?->data ?? (object) [];
+        return SystemSetting::first()?->data ?? [];
     }
 
     public function update(Request $request)
     {
-        $row = SystemSetting::first() ?? SystemSetting::create(['data' => []]);
-        $current = $row->data ?? [];
+        $row = SystemSetting::first() ?? new SystemSetting(['data' => []]);
+        $current = is_array($row->data) ? $row->data : [];
 
-        // only known keys can be changed
-        $row->data = array_merge($current, $request->only(array_keys($current)));
+        $payload = $request->all();
+        $updated = array_merge($current, $payload);
+
+        $row->data = $updated;
         $row->save();
 
         $s = $row->data;
@@ -27,7 +29,7 @@ class SettingsController extends Controller
             $request->user(),
             'Updated System Settings',
             'System Settings',
-            "Updated configuration (Term: {$s['academicYear']} {$s['semester']}, Enrollment: {$s['enrollmentStatus']})"
+            "Updated configuration (Term: " . ($s['academicYear'] ?? 'N/A') . ' ' . ($s['semester'] ?? 'N/A') . ', Enrollment: ' . ($s['enrollmentStatus'] ?? 'N/A') . ')'
         );
         return $row->data;
     }

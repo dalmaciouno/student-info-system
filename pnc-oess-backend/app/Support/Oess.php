@@ -74,10 +74,14 @@ class Oess
         }
     }
 
-    // NO-SECURITY VERSION: no per-student restriction, anyone can see everything.
-    // ?studentNumber= still works as a plain filter.
+    // Students only ever see their own records, staff can optionally filter with ?studentNumber=
     public static function scopeToStudent($query, User $user, ?string $requested)
     {
+        if ($user->role === 'Student') {
+            return $user->studentNumber
+                ? $query->where('studentNumber', $user->studentNumber)
+                : $query->whereRaw('1 = 0');
+        }
         return $requested ? $query->where('studentNumber', $requested) : $query;
     }
 }
