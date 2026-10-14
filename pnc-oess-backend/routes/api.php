@@ -17,6 +17,10 @@ use Illuminate\Support\Facades\Route;
 // role('Registrar', 'Administrator') -> middleware string
 $role = fn (string ...$roles) => RoleMiddleware::class . ':' . implode(',', $roles);
 
+Route::get('/', fn () => response()->json([
+    'status' => 'ok',
+    'message' => 'PnC-OESS API is running.',
+]));
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 

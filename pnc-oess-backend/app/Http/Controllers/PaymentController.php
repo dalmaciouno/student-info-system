@@ -6,6 +6,7 @@ use App\Models\Enrollment;
 use App\Models\Payment;
 use App\Support\Oess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
@@ -68,14 +69,29 @@ class PaymentController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        $payment = Payment::findOrFail($id);
-        $payment->status = $data['status'];
-        if (! empty($data['remarks'])) {
-            $payment->remarks = $data['remarks'];
-        }
-        $payment->verifiedBy = $request->user()->name;
-        $payment->verifiedDate = Oess::now();
-        $payment->save();
+        $payment = DB::transaction(function () use ($data, $id, $request) {
+            $payment = Payment::findOrFail($id);
+            $payment->status = $data['status'];
+            if (! empty($data['remarks'])) {
+                $payment->remarks = $data['remarks'];
+            }
+            $payment->verifiedBy = $request->user()->name;
+            $payment->verifiedDate = Oess::now();
+            $payment->save();
+
+            if (strcasecmp(trim($data['status']), 'Verified') === 0 && $payment->enrollmentId) {
+                $enrollment = Enrollment::where('id', $payment->enrollmentId)
+                    ->where('studentNumber', $payment->studentNumber)
+                    ->first();
+                $enrollmentStatus = strtolower(preg_replace('/[\s_-]/', '', (string) $enrollment?->status));
+                if ($enrollment && in_array($enrollmentStatus, ['approved', 'preassessed'], true)) {
+                    $enrollment->status = 'Enrolled';
+                    $enrollment->save();
+                }
+            }
+
+            return $payment;
+        });
 
         $amount = number_format($payment->amount, 2);
         Oess::audit($request->user(), "{$data['status']} Payment", 'Payments',

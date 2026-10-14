@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Enrollment;
+use App\Models\Payment;
 use App\Models\SubjectOffering;
 use App\Models\SystemSetting;
 use App\Models\Term;
@@ -85,6 +86,7 @@ class EnrollmentController extends Controller
             'term' => 'nullable|string|max:100',
             'totalUnits' => 'required|integer|min:0',
             'items' => 'required|array|min:1',
+            'items.*.subjectCode' => 'required|string|max:50',
             'fees' => 'required|array',
         ]);
 
@@ -95,6 +97,64 @@ class EnrollmentController extends Controller
         $academicYear = $settings['academicYear'] ?? null;
         if (preg_match('/^(.*?)\s+(\d{4}-\d{4})$/', $term, $m)) {
             [$semester, $academicYear] = [$m[1], $m[2]];
+        }
+
+        $termEnrollments = Enrollment::where('studentNumber', $user->studentNumber)
+            ->where('term', $term)
+            ->get();
+        $verifiedEnrollmentIds = Payment::where('studentNumber', $user->studentNumber)
+            ->where('status', 'Verified')
+            ->whereIn('enrollmentId', $termEnrollments->pluck('id'))
+            ->pluck('enrollmentId')
+            ->all();
+        $registrarApprovedStatuses = ['approved', 'preassessed'];
+        $verifiedEnrollmentIds = $termEnrollments
+            ->filter(function ($enrollment) use ($registrarApprovedStatuses, $verifiedEnrollmentIds) {
+                $status = strtolower(preg_replace('/[\s_-]/', '', (string) $enrollment->status));
+                return in_array($status, $registrarApprovedStatuses, true)
+                    && in_array($enrollment->id, $verifiedEnrollmentIds, true);
+            })
+            ->pluck('id')
+            ->all();
+        $hasActiveApplication = $termEnrollments->contains(function ($enrollment) use ($verifiedEnrollmentIds) {
+            $status = strtolower(preg_replace('/[\s_-]/', '', (string) $enrollment->status));
+            return in_array($status, ['pending', 'approved', 'preassessed'], true)
+                && ! in_array($enrollment->id, $verifiedEnrollmentIds, true);
+        });
+
+        if ($hasActiveApplication) {
+            return response()->json([
+                'message' => 'You already have an enrollment application awaiting completion for this term.',
+            ], 422);
+        }
+
+        $completedSubjectCodes = $termEnrollments
+            ->filter(function ($enrollment) use ($verifiedEnrollmentIds) {
+                $status = strtolower(preg_replace('/[\s_-]/', '', (string) $enrollment->status));
+                return in_array($status, ['enrolled', 'completed', 'confirmed'], true)
+                    || in_array($enrollment->id, $verifiedEnrollmentIds, true);
+            })
+            ->flatMap(fn ($enrollment) => collect($enrollment->items ?? [])
+                ->pluck('subjectCode')
+                ->map(fn ($subjectCode) => strtoupper(trim((string) $subjectCode))))
+            ->filter()
+            ->unique()
+            ->all();
+        $submittedSubjectCodes = collect($data['items'])
+            ->pluck('subjectCode')
+            ->map(fn ($subjectCode) => strtoupper(trim($subjectCode)));
+        $duplicateSubjectCodes = $submittedSubjectCodes
+            ->filter(fn ($subjectCode) => in_array($subjectCode, $completedSubjectCodes, true))
+            ->unique()
+            ->values();
+
+        if ($submittedSubjectCodes->count() !== $submittedSubjectCodes->unique()->count()) {
+            return response()->json(['message' => 'An enrollment cannot contain the same subject more than once.'], 422);
+        }
+        if ($duplicateSubjectCodes->isNotEmpty()) {
+            return response()->json([
+                'message' => 'These subjects are already enrolled for this term: ' . $duplicateSubjectCodes->implode(', ') . '.',
+            ], 422);
         }
 
         $enrollment = Enrollment::create([
